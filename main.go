@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -13,13 +14,14 @@ import (
 )
 
 type Connection struct {
-	Name            string  `json:"name"`
-	Host            string  `json:"host"`
-	Destination     string  `json:"destination"`
-	Local           string  `json:"local"`
-	Username        string  `json:"username"`
-	Password        *string `json:"password"`
-	CertificateFile *string `json:"certificate_file"`
+	Name        string  `json:"name"`
+	Host        string  `json:"host"`
+	Destination string  `json:"destination"`
+	Local       string  `json:"local"`
+	Username    string  `json:"username"`
+	Password    *string `json:"password"`
+	Key         *string `json:"key"`
+	KeyPassword *string `json:"Key_password"`
 }
 
 type Config struct {
@@ -75,9 +77,10 @@ func LoadConfig() Config {
 func (c *Connection) Start() {
 	CallClear()
 	fmt.Println("Starting to tunnel")
+	auth := LoadAuth(c)
 	tunnel := sshtunnel.NewSSHTunnel(
 		fmt.Sprintf("%s@%s", c.Username, c.Host),
-		ssh.Password(*c.Password),
+		auth,
 		c.Destination,
 		c.Local,
 	)
@@ -86,6 +89,33 @@ func (c *Connection) Start() {
 	if err != nil {
 		fmt.Println(err)
 	}
+}
+
+func LoadAuth(c *Connection) ssh.AuthMethod {
+	if c.Key != nil {
+		if c.KeyPassword != nil {
+			return PrivateKeyFileWithPassword(*c.Key, *c.Password)
+		}
+		return sshtunnel.PrivateKeyFile(*c.Key)
+	}
+	if c.Password == nil {
+		return nil
+	}
+	return ssh.Password(*c.Password)
+}
+
+func PrivateKeyFileWithPassword(key string, password string) ssh.AuthMethod {
+	buffer, err := ioutil.ReadFile(key)
+	if err != nil {
+		return nil
+	}
+
+	pem, err := ssh.ParsePrivateKeyWithPassphrase(buffer, []byte(password))
+	if err != nil {
+		return nil
+	}
+
+	return ssh.PublicKeys(pem)
 }
 
 func init() {
