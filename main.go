@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
+	"runtime"
 
 	"github.com/elliotchance/sshtunnel"
 	"golang.org/x/crypto/ssh"
@@ -24,6 +26,8 @@ type Config struct {
 	Connection []Connection `json:"connection"`
 }
 
+var clear map[string]func()
+
 func (c *Config) Len() int {
 	count := 0
 	for i := range c.Connection {
@@ -41,7 +45,7 @@ func (c *Config) PrintConnection() {
 	fmt.Println("Silakan pilih koneksi untuk memulai tunneling")
 	for i, c2 := range c.Connection {
 		no := i + 1
-		fmt.Printf("%d. %s \n", no, c2.Name)
+		fmt.Printf("%d. %s (%s|%s -> 127.0.0.1:%s)\n", no, c2.Name, c2.Host, c2.Destination, c2.Local)
 	}
 }
 
@@ -69,6 +73,7 @@ func LoadConfig() Config {
 }
 
 func (c *Connection) Start() {
+	CallClear()
 	fmt.Println("Starting to tunnel")
 	tunnel := sshtunnel.NewSSHTunnel(
 		fmt.Sprintf("%s@%s", c.Username, c.Host),
@@ -77,6 +82,31 @@ func (c *Connection) Start() {
 		c.Local,
 	)
 	tunnel.Log = log.New(os.Stdout, "", log.Ldate|log.Lmicroseconds)
-	tunnel.Start()
+	err := tunnel.Start()
+	if err != nil {
+		fmt.Println(err)
+	}
+}
 
+func init() {
+	clear = make(map[string]func()) //Initialize it
+	clear["linux"] = func() {
+		cmd := exec.Command("clear") //Linux example, its tested
+		cmd.Stdout = os.Stdout
+		cmd.Run()
+	}
+	clear["windows"] = func() {
+		cmd := exec.Command("cmd", "/c", "cls") //Windows example, its tested
+		cmd.Stdout = os.Stdout
+		cmd.Run()
+	}
+}
+
+func CallClear() {
+	value, ok := clear[runtime.GOOS] //runtime.GOOS -> linux, windows, darwin etc.
+	if ok {                          //if we defined a clear func for that platform:
+		value() //we execute it
+	} else { //unsupported platform
+		panic("Your platform is unsupported! I can't clear terminal screen :(")
+	}
 }
