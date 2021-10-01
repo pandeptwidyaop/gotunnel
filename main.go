@@ -76,7 +76,8 @@ func LoadConfig() Config {
 
 func (c *Connection) Start() {
 	CallClear()
-	fmt.Println("Starting to tunnel")
+	log.Printf("made a connection to %s->%s\n", c.Host, c.Destination)
+	log.Printf("creating tunnel to port : %s \n", c.Local)
 	auth := LoadAuth(c)
 	tunnel := sshtunnel.NewSSHTunnel(
 		fmt.Sprintf("%s@%s", c.Username, c.Host),
@@ -84,7 +85,7 @@ func (c *Connection) Start() {
 		c.Destination,
 		c.Local,
 	)
-	tunnel.Log = log.New(os.Stdout, "", log.Ldate|log.Lmicroseconds)
+	tunnel.Log = log.New(os.Stdout, "", log.Ldate|log.Ltime)
 	err := tunnel.Start()
 	if err != nil {
 		fmt.Println(err)
@@ -94,24 +95,29 @@ func (c *Connection) Start() {
 func LoadAuth(c *Connection) ssh.AuthMethod {
 	if c.Key != nil {
 		if c.KeyPassword != nil {
-			return PrivateKeyFileWithPassword(*c.Key, *c.Password)
+			log.Println("using private key with password")
+			return PrivateKeyFileWithPassword(*c.Key, *c.KeyPassword)
 		}
+		log.Println("using private key")
 		return sshtunnel.PrivateKeyFile(*c.Key)
 	}
 	if c.Password == nil {
 		return nil
 	}
+	log.Println("using password")
 	return ssh.Password(*c.Password)
 }
 
 func PrivateKeyFileWithPassword(key string, password string) ssh.AuthMethod {
 	buffer, err := ioutil.ReadFile(key)
 	if err != nil {
+		fmt.Println(err)
 		return nil
 	}
 
 	pem, err := ssh.ParsePrivateKeyWithPassphrase(buffer, []byte(password))
 	if err != nil {
+		fmt.Print(err)
 		return nil
 	}
 
